@@ -1,30 +1,29 @@
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
-  patch,
-  put,
-  del,
-  requestBody,
-  response,
+  del, get,
+  getModelSchemaRef, param, patch, post, put, requestBody,
+  response
 } from '@loopback/rest';
 import {Persona} from '../models';
 import {PersonaRepository} from '../repositories';
+import {AutenticacionService} from '../services';
+const fetch = require('node-fetch');
 
 export class PersonaController {
   constructor(
     @repository(PersonaRepository)
-    public personaRepository : PersonaRepository,
-  ) {}
+    public personaRepository: PersonaRepository,
+    @service(AutenticacionService)
+    public servicioAutenticacion: AutenticacionService
+  ) { }
 
   @post('/personas')
   @response(200, {
@@ -44,7 +43,20 @@ export class PersonaController {
     })
     persona: Omit<Persona, 'id'>,
   ): Promise<Persona> {
-    return this.personaRepository.create(persona);
+    let clave = this.servicioAutenticacion.generarClave();
+    let claveCifrada = this.servicioAutenticacion.cifrarClave(clave);
+    persona.clave = claveCifrada;
+    let p = await this.personaRepository.create(persona);
+
+    //notificar al usuario
+    let destino = persona.correo;
+    let asunto = 'Registro en la plataforma (API FEDO) con Python, Loopback, NodeJS, Twilio y SendGrid.';
+    let contenido = `Hola ${persona.nombres}, su usuario es: ${persona.correo} y su contraseña es: ${clave}`;
+    fetch(`http://127.0.0.1:5000/envio-correo?correo_destino=${destino}&subject=${asunto}&mensaje=${contenido}`)
+      .then((data: any) => {
+        console.log(data);
+      })
+    return p;
   }
 
   @get('/personas/count')
