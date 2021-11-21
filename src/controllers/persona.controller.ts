@@ -9,10 +9,11 @@ import {
 } from '@loopback/repository';
 import {
   del, get,
-  getModelSchemaRef, param, patch, post, put, requestBody,
+  getModelSchemaRef, HttpErrors, param, patch, post, put, requestBody,
   response
 } from '@loopback/rest';
-import {Persona} from '../models';
+import {Llaves} from '../config/llaves';
+import {Credenciales, Persona} from '../models';
 import {PersonaRepository} from '../repositories';
 import {AutenticacionService} from '../services';
 const fetch = require('node-fetch');
@@ -24,6 +25,38 @@ export class PersonaController {
     @service(AutenticacionService)
     public servicioAutenticacion: AutenticacionService
   ) { }
+
+
+
+
+  @post("/identificarPersona", {
+    responses: {
+      '200': {
+        description: "Identificacion de usuarios"
+      }
+    }
+  })
+  async idenficarpersona(
+    @requestBody() credenciales: Credenciales
+  ) {
+    let p = await this.servicioAutenticacion.identificarPersona(credenciales.usuario, credenciales.clave);
+    if (p) {
+      let token = this.servicioAutenticacion.generarTokenJWT(p);
+      return {
+        datos: {
+          nombre: p.nombres,
+          correo: p.correo,
+          id: p.id
+        },
+        tk: token
+      }
+    } else {
+      throw new HttpErrors[401]("Datos invalidos ")
+    }
+  }
+
+
+
 
   @post('/personas')
   @response(200, {
@@ -52,7 +85,14 @@ export class PersonaController {
     let destino = persona.correo;
     let asunto = 'Registro en la plataforma (API FEDO) con Python, Loopback, NodeJS, Twilio y SendGrid.';
     let contenido = `Hola ${persona.nombres}, su usuario es: ${persona.correo} y su contraseña es: ${clave}`;
-    fetch(`http://127.0.0.1:5000/envio-correo?correo_destino=${destino}&subject=${asunto}&mensaje=${contenido}`)
+    fetch(`${Llaves.urlServiciosNotificaciones}/envio-correo?correo_destino=${destino}&subject=${asunto}&mensaje=${contenido}`)
+      .then((data: any) => {
+        console.log(data);
+      })
+    //notificar por sms
+    let numero = persona.celular;
+    let mensaje = `Hola, ${persona.nombres}, te has registrado correctamente en la plataforma del Fedo, tu usuario es: ${persona.correo} y tu contraseña es: ${clave}`;
+    fetch(`${Llaves.urlServiciosNotificaciones}/sms?mensaje=${mensaje}&telefono=${numero}`)
       .then((data: any) => {
         console.log(data);
       })
